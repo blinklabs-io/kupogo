@@ -207,3 +207,73 @@ func TestClient_GetScriptByHash(t *testing.T) {
 		}
 	})
 }
+
+func TestClient_GetDatumByHash(t *testing.T) {
+	t.Run("Successful request and unmarshaling of response", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/datums/34215ad90b1ade84f5b4fe3c0a16cb3afeae468210535e0305efd93931f35059" {
+				response := DatumResponse{
+					Datum: "d87980",
+				}
+				respBody, _ := json.Marshal(response)
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(respBody)
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+			}
+		}))
+		defer server.Close()
+
+		client := &Client{KupoUrl: server.URL}
+		datumResponse, err := client.GetDatumByHash("34215ad90b1ade84f5b4fe3c0a16cb3afeae468210535e0305efd93931f35059")
+		expectedResponse := &DatumResponse{
+			Datum: "d87980",
+		}
+		if err != nil {
+			t.Fatalf("Expected no error, got %s", err)
+		}
+		if !reflect.DeepEqual(datumResponse, expectedResponse) {
+			t.Errorf("Expected response %v, got %v", expectedResponse, datumResponse)
+		}
+	})
+
+	t.Run("Successful request returning null", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("null"))
+		}))
+		defer server.Close()
+
+		client := &Client{KupoUrl: server.URL}
+		datumResponse, err := client.GetDatumByHash("34215ad90b1ade84f5b4fe3c0a16cb3afeae468210535e0305efd93931f35059")
+		if err != nil {
+			t.Fatalf("Expected no error, got %s", err)
+		}
+		if datumResponse != nil {
+			t.Errorf("Expected null response, got %v", datumResponse)
+		}
+	})
+
+	t.Run("Failed unmarshaling missing key", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("{}"))
+		}))
+		defer server.Close()
+
+		client := &Client{KupoUrl: server.URL}
+		_, err := client.GetDatumByHash("34215ad90b1ade84f5b4fe3c0a16cb3afeae468210535e0305efd93931f35059")
+		expectedErrMsg := "failed to validate datum response: Key: 'DatumResponse.Datum' Error:Field validation for 'Datum' failed on the 'required' tag"
+		if err == nil {
+			t.Fatalf("Expected an error, got nil")
+		} else if err.Error() != expectedErrMsg {
+			t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+		}
+	})
+}
