@@ -15,6 +15,7 @@
 package kupogo
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -55,6 +56,12 @@ type SpentAt struct {
 
 type Client struct {
 	KupoUrl string
+}
+
+type Metadata struct {
+	Hash   string          `json:"hash"`
+	Raw    []byte          `json:"-"`
+	Schema json.RawMessage `json:"schema"`
 }
 
 func NewClient(url string) *Client {
@@ -142,4 +149,61 @@ func (c *Client) GetMatches(pattern string) (*Matches, error) {
 		return nil, fmt.Errorf("fail unmarshal: %s", err)
 	}
 	return &matches, nil
+}
+
+func (c *Client) GetMetadata(slotNo int, transactionID string) (*Metadata, error) {
+	url := fmt.Sprintf("%s/metadata/%d", c.KupoUrl, slotNo)
+	// Add the transaction_id query parameter if provided
+	if transactionID != "" {
+		url += fmt.Sprintf("?transaction_id=%s", transactionID)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %s", err)
+	}
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get metadata: %s", err)
+	}
+	defer resp.Body.Close()
+
+	// Check for 304 Not Modified
+	if resp.StatusCode == http.StatusNotModified {
+		return nil, fmt.Errorf("metadata not modified since last request")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get metadata: status code %d", resp.StatusCode)
+	}
+
+	var response struct {
+		Hash   string          `json:"hash"`
+		RawHex string          `json:"raw"`
+		Schema json.RawMessage `json:"schema"`
+	}
+
+	respBodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(respBodyBytes, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal metadata: %s", err)
+	}
+
+	rawBytes, err := hex.DecodeString(response.RawHex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode raw data: %s", err)
+	}
+
+	metadata := &Metadata{
+		Hash:   response.Hash,
+		Raw:    rawBytes,
+		Schema: response.Schema,
+	}
+
+	return metadata, nil
 }
