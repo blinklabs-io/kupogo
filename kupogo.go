@@ -207,3 +207,71 @@ func (c *Client) GetMetadata(slotNo int, transactionID string) (*Metadata, error
 
 	return metadata, nil
 }
+
+func (c *Client) GetPatterns() ([]string, error) {
+	req, err := http.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("%s/patterns", c.KupoUrl),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %s", err)
+	}
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get patterns: %s", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get patterns: status code %d", resp.StatusCode)
+	}
+
+	var patterns []string
+	respBodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(respBodyBytes, &patterns)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal patterns: %s", err)
+	}
+
+	return patterns, nil
+}
+
+func (c *Client) GetPattern(pattern string) ([]string, error) {
+	req, err := http.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("%s/patterns/%s", c.KupoUrl, pattern),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %s", err)
+	}
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pattern: %s", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get pattern: status code %d", resp.StatusCode)
+	}
+
+	var patterns []string
+	respBodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(respBodyBytes, &patterns)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal pattern: %s", err)
+	}
+
+	return patterns, nil
+}
