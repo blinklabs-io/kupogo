@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/go-playground/validator/v10"
 )
 
 type Matches []Match
@@ -62,6 +64,11 @@ type Metadata struct {
 	Hash   string          `json:"hash"`
 	Raw    []byte          `json:"-"`
 	Schema json.RawMessage `json:"schema"`
+}
+
+type ScriptResponse struct {
+	Language string `json:"language" validate:"required"`
+	Script   string `json:"script" validate:"required"`
 }
 
 func NewClient(url string) *Client {
@@ -274,4 +281,53 @@ func (c *Client) GetPattern(pattern string) ([]string, error) {
 	}
 
 	return patterns, nil
+}
+
+func (c *Client) GetScriptByHash(scriptHash string) (*ScriptResponse, error) {
+	req, err := http.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("%s/scripts/%s", c.KupoUrl, scriptHash),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %s", err)
+	}
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get script: %s", err)
+	}
+	defer resp.Body.Close()
+
+	// Check for 304 Not Modified
+	if resp.StatusCode == http.StatusNotModified {
+		return nil, fmt.Errorf("script not modified since last request")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get script: status code %d", resp.StatusCode)
+	}
+
+	var scriptResponse ScriptResponse
+	respBodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for empty response
+	if string(respBodyBytes) == "null" {
+		return nil, nil
+	}
+
+	err = json.Unmarshal(respBodyBytes, &scriptResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal script response: %s", err)
+	}
+
+	validate := validator.New()
+	err = validate.Struct(scriptResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate script response: %s", err)
+	}
+	return &scriptResponse, nil
 }

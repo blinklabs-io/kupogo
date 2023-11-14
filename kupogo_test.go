@@ -135,3 +135,75 @@ func TestClient_GetPatterns(t *testing.T) {
 		}
 	})
 }
+
+func TestClient_GetScriptByHash(t *testing.T) {
+	t.Run("Successful request and unmarshaling of response", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/scripts/4fc6bb0c93780ad706425d9f7dc1d3c5e3ddbf29ba8486dce904a5fc" {
+				response := ScriptResponse{
+					Language: "plutus:v2",
+					Script:   "8201838200581c3c07030e36bfffe67e2e2ec09e5293d384637cd2f004356ef320f3fe8204186482051896",
+				}
+				respBody, _ := json.Marshal(response)
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(respBody)
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+			}
+		}))
+		defer server.Close()
+
+		client := &Client{KupoUrl: server.URL}
+		scriptResponse, err := client.GetScriptByHash("4fc6bb0c93780ad706425d9f7dc1d3c5e3ddbf29ba8486dce904a5fc")
+		expectedResponse := &ScriptResponse{
+			Language: "plutus:v2",
+			Script:   "8201838200581c3c07030e36bfffe67e2e2ec09e5293d384637cd2f004356ef320f3fe8204186482051896",
+		}
+		if err != nil {
+			t.Fatalf("Expected no error, got %s", err)
+		}
+		if !reflect.DeepEqual(scriptResponse, expectedResponse) {
+			t.Errorf("Expected response %v, got %v", expectedResponse, scriptResponse)
+		}
+	})
+
+	t.Run("Successful request returning null", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("null"))
+		}))
+		defer server.Close()
+
+		client := &Client{KupoUrl: server.URL}
+		scriptResponse, err := client.GetScriptByHash("4fc6bb0c93780ad706425d9f7dc1d3c5e3ddbf29ba8486dce904a5fc")
+		if err != nil {
+			t.Fatalf("Expected no error, got %s", err)
+		}
+		if scriptResponse != nil {
+			t.Errorf("Expected null response, got %v", scriptResponse)
+		}
+	})
+
+	t.Run("Failed unmarshaling missing key", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"language": "plutus:v2"}`))
+		}))
+		defer server.Close()
+
+		client := &Client{KupoUrl: server.URL}
+		_, err := client.GetScriptByHash("4fc6bb0c93780ad706425d9f7dc1d3c5e3ddbf29ba8486dce904a5fc")
+		expectedErrMsg := "failed to validate script response: Key: 'ScriptResponse.Script' Error:Field validation for 'Script' failed on the 'required' tag"
+		if err == nil {
+			t.Fatalf("Expected no error, got %s", err)
+		} else if err.Error() != expectedErrMsg {
+			t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+		}
+	})
+}
