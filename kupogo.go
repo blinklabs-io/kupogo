@@ -71,6 +71,10 @@ type ScriptResponse struct {
 	Script   string `json:"script" validate:"required"`
 }
 
+type DatumResponse struct {
+	Datum string `json:"datum" validate:"required"`
+}
+
 func NewClient(url string) *Client {
 	return &Client{KupoUrl: url}
 }
@@ -330,4 +334,54 @@ func (c *Client) GetScriptByHash(scriptHash string) (*ScriptResponse, error) {
 		return nil, fmt.Errorf("failed to validate script response: %s", err)
 	}
 	return &scriptResponse, nil
+}
+
+func (c *Client) GetDatumByHash(datumHash string) (*DatumResponse, error) {
+	req, err := http.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("%s/datums/%s", c.KupoUrl, datumHash),
+		nil,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %s", err)
+	}
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get datum: %s", err)
+	}
+	defer resp.Body.Close()
+
+	// Check for 304 Not Modified
+	if resp.StatusCode == http.StatusNotModified {
+		return nil, fmt.Errorf("datum not modified since last request")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get datum: status code %d", resp.StatusCode)
+	}
+
+	respBodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for empty response
+	if string(respBodyBytes) == "null" {
+		return nil, nil
+	}
+
+	var datumResponse DatumResponse
+	err = json.Unmarshal(respBodyBytes, &datumResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal datum: %s", err)
+	}
+
+	validate := validator.New()
+	err = validate.Struct(datumResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate datum response: %s", err)
+	}
+	return &datumResponse, nil
 }
