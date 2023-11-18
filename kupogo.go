@@ -67,7 +67,7 @@ type Patterns []Pattern
 
 type ScriptResponse struct {
 	Language string `json:"language" validate:"required"`
-	Script   string `json:"script" validate:"required"`
+	Script   string `json:"script"   validate:"required"`
 }
 
 type DatumResponse struct {
@@ -118,12 +118,12 @@ func (c *Client) GetAllMatches() (*Matches, error) {
 		return nil, fmt.Errorf("failed getting body bytes: %s", err)
 	}
 	defer resp.Body.Close()
-	matches := Matches{}
+	matches := &Matches{}
 	err = json.Unmarshal(respBodyBytes, &matches)
 	if err != nil {
 		return nil, fmt.Errorf("failed unmarshal: %s", err)
 	}
-	return &matches, nil
+	return matches, nil
 }
 
 func (c *Client) GetMatches(pattern string) (*Matches, error) {
@@ -155,68 +155,61 @@ func (c *Client) GetMatches(pattern string) (*Matches, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	matches := Matches{}
+	matches := &Matches{}
 	err = json.Unmarshal(respBodyBytes, &matches)
 	if err != nil {
 		return nil, fmt.Errorf("fail unmarshal: %s", err)
 	}
-	return &matches, nil
+	return matches, nil
 }
 
-func (c *Client) GetMetadata(slotNo int, transactionID string) (*Metadata, error) {
+func (c *Client) GetMetadata(slotNo int, txId string) (*Metadata, error) {
 	url := fmt.Sprintf("%s/metadata/%d", c.KupoUrl, slotNo)
 	// Add the transaction_id query parameter if provided
-	if transactionID != "" {
-		url += fmt.Sprintf("?transaction_id=%s", transactionID)
+	if txId != "" {
+		url += fmt.Sprintf("?transaction_id=%s", txId)
 	}
-
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %s", err)
 	}
-
 	resp, err := c.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %s", err)
 	}
 	defer resp.Body.Close()
-
 	// Check for 304 Not Modified
 	if resp.StatusCode == http.StatusNotModified {
 		return nil, fmt.Errorf("metadata not modified since last request")
 	}
-
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get metadata: status code %d", resp.StatusCode)
+		return nil, fmt.Errorf(
+			"failed to get metadata: status code %d",
+			resp.StatusCode,
+		)
 	}
-
+	respBodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	var response struct {
 		Hash   string          `json:"hash"`
 		RawHex string          `json:"raw"`
 		Schema json.RawMessage `json:"schema"`
 	}
-
-	respBodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
 	err = json.Unmarshal(respBodyBytes, &response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal metadata: %s", err)
 	}
-
 	rawBytes, err := hex.DecodeString(response.RawHex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode raw data: %s", err)
 	}
-
 	metadata := &Metadata{
 		Hash:   response.Hash,
 		Raw:    rawBytes,
 		Schema: response.Schema,
 	}
-
 	return metadata, nil
 }
 
@@ -229,15 +222,16 @@ func (c *Client) GetAllPatterns() (*Patterns, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %s", err)
 	}
-
 	resp, err := c.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get patterns: %s", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get patterns: status code %d", resp.StatusCode)
+		return nil, fmt.Errorf(
+			"failed to get patterns: status code %d",
+			resp.StatusCode,
+		)
 	}
 	respBodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -260,15 +254,16 @@ func (c *Client) GetPattern(pattern string) (*Patterns, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %s", err)
 	}
-
 	resp, err := c.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pattern: %s", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get pattern: status code %d", resp.StatusCode)
+		return nil, fmt.Errorf(
+			"failed to get pattern: status code %d",
+			resp.StatusCode,
+		)
 	}
 	respBodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -291,44 +286,40 @@ func (c *Client) GetScriptByHash(scriptHash string) (*ScriptResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %s", err)
 	}
-
 	resp, err := c.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get script: %s", err)
 	}
 	defer resp.Body.Close()
-
 	// Check for 304 Not Modified
 	if resp.StatusCode == http.StatusNotModified {
 		return nil, fmt.Errorf("script not modified since last request")
 	}
-
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get script: status code %d", resp.StatusCode)
+		return nil, fmt.Errorf(
+			"failed to get script: status code %d",
+			resp.StatusCode,
+		)
 	}
-
-	var scriptResponse ScriptResponse
 	respBodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-
 	// Check for empty response
 	if string(respBodyBytes) == "null" {
 		return nil, nil
 	}
-
+	scriptResponse := &ScriptResponse{}
 	err = json.Unmarshal(respBodyBytes, &scriptResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal script response: %s", err)
 	}
-
 	validate := validator.New()
 	err = validate.Struct(scriptResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate script response: %s", err)
 	}
-	return &scriptResponse, nil
+	return scriptResponse, nil
 }
 
 func (c *Client) GetDatumByHash(datumHash string) (*DatumResponse, error) {
@@ -337,46 +328,41 @@ func (c *Client) GetDatumByHash(datumHash string) (*DatumResponse, error) {
 		fmt.Sprintf("%s/datums/%s", c.KupoUrl, datumHash),
 		nil,
 	)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %s", err)
 	}
-
 	resp, err := c.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get datum: %s", err)
 	}
 	defer resp.Body.Close()
-
 	// Check for 304 Not Modified
 	if resp.StatusCode == http.StatusNotModified {
 		return nil, fmt.Errorf("datum not modified since last request")
 	}
-
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get datum: status code %d", resp.StatusCode)
+		return nil, fmt.Errorf(
+			"failed to get datum: status code %d",
+			resp.StatusCode,
+		)
 	}
-
 	respBodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-
 	// Check for empty response
 	if string(respBodyBytes) == "null" {
 		return nil, nil
 	}
-
-	var datumResponse DatumResponse
+	datumResponse := &DatumResponse{}
 	err = json.Unmarshal(respBodyBytes, &datumResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal datum: %s", err)
 	}
-
 	validate := validator.New()
 	err = validate.Struct(datumResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate datum response: %s", err)
 	}
-	return &datumResponse, nil
+	return datumResponse, nil
 }
