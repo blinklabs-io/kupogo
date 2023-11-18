@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -80,8 +81,10 @@ func NewClient(url string) *Client {
 }
 
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
+	client := http.DefaultClient
+	client.Timeout = 5 * time.Minute
 	req.Header.Set("Accept", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed do: %s", err)
 	}
