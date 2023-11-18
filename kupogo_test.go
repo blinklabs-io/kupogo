@@ -37,7 +37,7 @@ func TestClient_GetPattern(t *testing.T) {
 		client := &Client{KupoUrl: server.URL}
 
 		patterns, err := client.GetPattern("*")
-		expectedPatterns := []string{
+		expectedPatterns := &Patterns{
 			"addr_vk1x7da0l25j04my8sej5ntrgdn38wmshxhplxdfjskn07ufavsgtkqn5hljl/*",
 			"*/script1cda3khwqv60360rp5m7akt50m6ttapacs8rqhn5w342z7r35m37",
 			"*/dca1e44765b9f80c8b18105e17de90d4a07e4d5a83de533e53fee32e0502d17e/*",
@@ -78,7 +78,7 @@ func TestClient_GetPattern(t *testing.T) {
 	})
 }
 
-func TestClient_GetPatterns(t *testing.T) {
+func TestClient_GetAllPatterns(t *testing.T) {
 	t.Run("Successful request and unmarshaling of response", func(t *testing.T) {
 		t.Parallel()
 
@@ -101,14 +101,14 @@ func TestClient_GetPatterns(t *testing.T) {
 
 		client := &Client{KupoUrl: server.URL}
 
-		patterns, err := client.GetPatterns()
+		patterns, err := client.GetAllPatterns()
 		if err != nil {
 			t.Fatalf("Expected no error, got %s", err)
 		}
 
 		log.Printf("Received patterns: %v", patterns)
 
-		expectedPatterns := []string{"*"}
+		expectedPatterns := &Patterns{"*"}
 		if !reflect.DeepEqual(patterns, expectedPatterns) {
 			t.Errorf("Expected patterns %v, got %v", expectedPatterns, patterns)
 		}
@@ -126,7 +126,7 @@ func TestClient_GetPatterns(t *testing.T) {
 
 		client := &Client{KupoUrl: invalidServer.URL}
 
-		_, err := client.GetPatterns()
+		_, err := client.GetAllPatterns()
 		expectedErrMsg := "failed to unmarshal patterns: invalid character 'i' looking for beginning of value"
 		if err == nil {
 			t.Error("Expected an error, got nil")

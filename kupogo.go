@@ -66,6 +66,9 @@ type Metadata struct {
 	Schema json.RawMessage `json:"schema"`
 }
 
+type Pattern string
+type Patterns []Pattern
+
 type ScriptResponse struct {
 	Language string `json:"language" validate:"required"`
 	Script   string `json:"script" validate:"required"`
@@ -219,7 +222,7 @@ func (c *Client) GetMetadata(slotNo int, transactionID string) (*Metadata, error
 	return metadata, nil
 }
 
-func (c *Client) GetPatterns() ([]string, error) {
+func (c *Client) GetAllPatterns() (*Patterns, error) {
 	req, err := http.NewRequest(
 		http.MethodGet,
 		fmt.Sprintf("%s/patterns", c.KupoUrl),
@@ -238,22 +241,19 @@ func (c *Client) GetPatterns() ([]string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get patterns: status code %d", resp.StatusCode)
 	}
-
-	var patterns []string
 	respBodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-
+	patterns := &Patterns{}
 	err = json.Unmarshal(respBodyBytes, &patterns)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal patterns: %s", err)
 	}
-
 	return patterns, nil
 }
 
-func (c *Client) GetPattern(pattern string) ([]string, error) {
+func (c *Client) GetPattern(pattern string) (*Patterns, error) {
 	req, err := http.NewRequest(
 		http.MethodGet,
 		fmt.Sprintf("%s/patterns/%s", c.KupoUrl, pattern),
@@ -272,18 +272,15 @@ func (c *Client) GetPattern(pattern string) ([]string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get pattern: status code %d", resp.StatusCode)
 	}
-
-	var patterns []string
 	respBodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-
+	patterns := &Patterns{}
 	err = json.Unmarshal(respBodyBytes, &patterns)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal pattern: %s", err)
 	}
-
 	return patterns, nil
 }
 
