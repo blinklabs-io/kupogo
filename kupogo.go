@@ -27,16 +27,16 @@ import (
 type Matches []Match
 
 type Match struct {
-	TransactionIndex int       `json:"transaction_index"`
-	TransactionID    string    `json:"transaction_id"`
-	OutputIndex      int       `json:"output_index"`
-	Address          string    `json:"address"`
-	Value            Value     `json:"value"`
-	DatumHash        *string   `json:"datum_hash"`
-	DatumType        *string   `json:"datum_type"`
-	ScriptHash       *string   `json:"script_hash"`
-	CreatedAt        CreatedAt `json:"created_at"`
-	SpentAt          *SpentAt  `json:"spent_at"`
+	TransactionIndex int     `json:"transaction_index"`
+	TransactionID    string  `json:"transaction_id"`
+	OutputIndex      int     `json:"output_index"`
+	Address          string  `json:"address"`
+	Value            Value   `json:"value"`
+	DatumHash        *string `json:"datum_hash"`
+	DatumType        *string `json:"datum_type"`
+	ScriptHash       *string `json:"script_hash"`
+	CreatedAt        Point   `json:"created_at"`
+	SpentAt          *Point  `json:"spent_at"`
 }
 
 type Assets map[string]int
@@ -46,12 +46,7 @@ type Value struct {
 	Assets Assets `json:"assets"`
 }
 
-type CreatedAt struct {
-	SlotNo     int    `json:"slot_no"`
-	HeaderHash string `json:"header_hash"`
-}
-
-type SpentAt struct {
+type Point struct {
 	SlotNo     int    `json:"slot_no"`
 	HeaderHash string `json:"header_hash"`
 }
