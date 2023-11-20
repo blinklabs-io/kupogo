@@ -1,6 +1,7 @@
 package kupogo
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -330,6 +331,94 @@ func TestClient_GetDatumByHash(t *testing.T) {
 			"34215ad90b1ade84f5b4fe3c0a16cb3afeae468210535e0305efd93931f35059",
 		)
 		expectedErrMsg := "failed to validate datum response: Key: 'DatumResponse.Datum' Error:Field validation for 'Datum' failed on the 'required' tag"
+		if err == nil {
+			t.Fatalf("Expected an error, got nil")
+		} else if err.Error() != expectedErrMsg {
+			t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+		}
+	})
+}
+
+func TestClient_GetMetadata(t *testing.T) {
+	t.Run("Successful request and unmarshaling of response", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/metadata/108923398" {
+				response := []struct {
+					Hash   string          `json:"hash"`
+					RawHex string          `json:"raw"`
+					Schema json.RawMessage `json:"schema"`
+				}{
+					{
+						Hash:   "b64602eebf602e8bbce198e2a1d6bbb2a109ae87fa5316135d217110d6d94649",
+						RawHex: "a11902a2a1636d736781781c4d696e737761703a205377617020457861637420496e204f72646572",
+						Schema: json.RawMessage(`{"exampleKey":"exampleValue"}`),
+					},
+				}
+				respBody, _ := json.Marshal(response)
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(respBody)
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+			}
+		}))
+		defer server.Close()
+
+		client := &Client{KupoUrl: server.URL}
+		metadataList, err := client.GetMetadata(108923398, "")
+		if err != nil {
+			t.Fatalf("Expected no error, got %s", err)
+		}
+
+		expectedRawData, _ := hex.DecodeString("a11902a2a1636d736781781c4d696e737761703a205377617020457861637420496e204f72646572")
+		expectedList := &Metadata{
+			{
+				Hash:   "b64602eebf602e8bbce198e2a1d6bbb2a109ae87fa5316135d217110d6d94649",
+				Raw:    expectedRawData,
+				Schema: json.RawMessage(`{"exampleKey":"exampleValue"}`),
+			},
+		}
+
+		if !reflect.DeepEqual(metadataList, expectedList) {
+			t.Errorf("Expected response %v, got %v", expectedList, metadataList)
+		}
+	})
+
+	t.Run("Successful request returning empty array", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("[]"))
+		}))
+		defer server.Close()
+
+		client := &Client{KupoUrl: server.URL}
+		metadataList, err := client.GetMetadata(108923398, "")
+		if err != nil {
+			t.Fatalf("Expected no error, got %s", err)
+		}
+		if len(*metadataList) != 0 {
+			t.Errorf("Expected empty response, got %v", metadataList)
+		}
+	})
+
+	t.Run("Failed unmarshaling missing key", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{
+              "hash": "b64602eebf602e8bbce198e2a1d6bbb2a109ae87fa5316135d217110d6d94649",
+              "raw": "b64602eebf602e8bbce198e2a1d6bbb2a109ae87fa5316135d217110d6d94649"
+          }]`))
+		}))
+		defer server.Close()
+
+		client := &Client{KupoUrl: server.URL}
+		_, err := client.GetMetadata(108923398, "")
+		expectedErrMsg := `failed to validate metadata item: Key: 'MetadataItem.Schema' Error:Field validation for 'Schema' failed on the 'required' tag`
 		if err == nil {
 			t.Fatalf("Expected an error, got nil")
 		} else if err.Error() != expectedErrMsg {

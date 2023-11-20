@@ -56,11 +56,13 @@ type Client struct {
 	KupoUrl string
 }
 
-type Metadata struct {
-	Hash   string          `json:"hash"`
-	Raw    []byte          `json:"-"`
-	Schema json.RawMessage `json:"schema"`
+type MetadataItem struct {
+	Hash   string          `json:"hash" validate:"required"`
+	Raw    []byte          `json:"-" validate:"required"`
+	Schema json.RawMessage `json:"schema" validate:"required"`
 }
+
+type Metadata []MetadataItem
 
 type Pattern string
 type Patterns []Pattern
@@ -165,51 +167,64 @@ func (c *Client) GetMatches(pattern string) (*Matches, error) {
 
 func (c *Client) GetMetadata(slotNo int, txId string) (*Metadata, error) {
 	url := fmt.Sprintf("%s/metadata/%d", c.KupoUrl, slotNo)
-	// Add the transaction_id query parameter if provided
 	if txId != "" {
 		url += fmt.Sprintf("?transaction_id=%s", txId)
 	}
+
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %s", err)
 	}
+
 	resp, err := c.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %s", err)
 	}
 	defer resp.Body.Close()
-	// Check for 304 Not Modified
+
 	if resp.StatusCode == http.StatusNotModified {
 		return nil, fmt.Errorf("metadata not modified since last request")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(
-			"failed to get metadata: status code %d",
-			resp.StatusCode,
-		)
+		return nil, fmt.Errorf("failed to get metadata: status code %d", resp.StatusCode)
 	}
+
 	respBodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-	var response struct {
+
+	var responses []struct {
 		Hash   string          `json:"hash"`
 		RawHex string          `json:"raw"`
 		Schema json.RawMessage `json:"schema"`
 	}
-	err = json.Unmarshal(respBodyBytes, &response)
+	err = json.Unmarshal(respBodyBytes, &responses)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal metadata: %s", err)
 	}
-	rawBytes, err := hex.DecodeString(response.RawHex)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode raw data: %s", err)
+
+	validate := validator.New()
+	metadata := &Metadata{}
+	for _, response := range responses {
+		rawBytes, err := hex.DecodeString(response.RawHex)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode raw data: %s", err)
+		}
+		metadataItem := MetadataItem{
+			Hash:   response.Hash,
+			Raw:    rawBytes,
+			Schema: response.Schema,
+		}
+
+		err = validate.Struct(metadataItem)
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate metadata item: %s", err)
+		}
+
+		*metadata = append(*metadata, metadataItem)
 	}
-	metadata := &Metadata{
-		Hash:   response.Hash,
-		Raw:    rawBytes,
-		Schema: response.Schema,
-	}
+
 	return metadata, nil
 }
 
