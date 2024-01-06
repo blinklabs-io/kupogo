@@ -1,6 +1,8 @@
 # kupogo
 Kupo client in Go
 
+Note: you should use https://github.com/SundaeSwap-finance/kugo instead
+
 ## Usage
 ```golang
 package main
